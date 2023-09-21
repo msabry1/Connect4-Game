@@ -2,9 +2,11 @@
 #include <Windows.h>
 #include<vector>
 #include<map>
+#include<algorithm>
 #include<fstream>
 using namespace std;
-const string SavedGamesfilePath = "C:\\Users\\HP\\Desktop\\SavedGames.txt" ;
+const string SavedGamesfilePath = "SavedGames.txt" ;
+const string TopScoresfilePath = "TopScores.txt" ;
 
 struct Timer
 {
@@ -50,6 +52,60 @@ struct ColoursTerminal
     }
 
 };
+bool topScoresCompareFunctions(pair<string,int> &p1 ,pair<string,int> &p2){
+    return p1.second > p2.second ;
+}
+struct TopScoresFileManager
+{
+    ofstream fout ;
+    vector<pair<string ,int>> top10Scores;
+
+    vector<pair<string ,int>> returnTopPlayers(){
+        ifstream fin ;
+        fin.open(TopScoresfilePath) ;
+        string playerName;
+        string playerScore ;
+        while(true) {
+            getline(fin,playerName) ;
+            if (playerName.empty() || top10Scores.size() > 10) break;
+            getline(fin,playerScore) ;
+
+            top10Scores.push_back({playerName,stoi(playerScore)}) ;
+        }
+        fin.close() ;
+        sort(top10Scores.begin(),top10Scores.end(),topScoresCompareFunctions) ;
+        return top10Scores ;
+    }
+
+    void writePlayer(const string &playername,const int &playerScore) {
+        returnTopPlayers() ;
+
+        int playersTopScoreCnt = top10Scores.size() ;
+        ofstream fout(TopScoresfilePath) ;
+
+        if (playersTopScoreCnt < 10 ) 
+            top10Scores.push_back({playername,playerScore}) ;
+        else {
+            for (int i = playersTopScoreCnt-1; i >=0 ; i--)
+                {
+                    if (playerScore > top10Scores[i].second)
+                        {
+                            top10Scores[i] = {playername,playerScore} ;
+                            break;
+                        }
+                }
+            }
+        playersTopScoreCnt = top10Scores.size() ;
+        for (int i = 0; i < playersTopScoreCnt; i++)
+        {
+            fout << top10Scores[i].first << '\n';
+            fout << top10Scores[i].second << '\n'; 
+        }
+        fout.close();
+    }
+};
+
+
 struct Game
 {
     int rows,colums ;
@@ -372,9 +428,20 @@ struct Game
         if (player1Score < player2Score) ifFirstplayerWin = 0 ;
 
         tr.colourize((ifFirstplayerWin?"red":"yellow")) ;
-        cout << "player " << (ifFirstplayerWin?"one":"two") << " win the match \n" ;
-        tr.colourize("white") ;
 
+        cout << "player " << (ifFirstplayerWin?"one":"two") << " win the match \n"  ;
+
+        tr.colourize("white") ;
+        if (!ifFirstplayerWin && !isTwoPlayersGame ) return ;
+
+        TopScoresFileManager topscores ;
+        cout << "player " << (ifFirstplayerWin?1:2)<< " enter your name : \n" ;
+        string playerName;
+
+        cin.ignore();
+        getline(cin , playerName) ;
+
+        topscores.writePlayer(playerName, (ifFirstplayerWin?player1Score:player2Score))  ;
     }
 
 };
@@ -384,12 +451,13 @@ struct connect4GameManager
     int menu(){
         int choice=-1 ;
         while (choice == -1 ) {
-            cout << "enter a num between 1 and 4 : \n" ;
+            cout << "enter a num between 1 and 5 : \n" ;
 
             cout << "1) New two players game\n" ;
             cout << "2) New one players game\n" ;
             cout << "3) Load Game\n" ;
-            cout << "4) Exit\n" ;
+            cout << "4) Print Top Players\n" ;
+            cout << "5) Exit\n" ;
 
             cin >> choice ;
 
@@ -448,6 +516,17 @@ struct connect4GameManager
                 
             }
             else if (choice == 4) 
+                {
+                    TopScoresFileManager topscores ;
+                    vector<pair<string,int>> topPlayers = topscores.returnTopPlayers() ;
+
+                    if (topPlayers.empty()) 
+                        cout << "No such top players, play games to store top players\n";
+                    else 
+                        for (auto playerInfo :topPlayers) 
+                            cout << "name: "<< playerInfo.first << " | score: " << playerInfo.second << '\n' ;
+                }
+            else if (choice == 5) 
                 exit(0) ;
                 
 
