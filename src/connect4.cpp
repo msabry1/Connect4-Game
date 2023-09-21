@@ -2,7 +2,9 @@
 #include <Windows.h>
 #include<vector>
 #include<map>
+#include<fstream>
 using namespace std;
+const string SavedGamesfilePath = "C:\\Users\\HP\\Desktop\\SavedGames.txt" ;
 
 struct Timer
 {
@@ -28,10 +30,6 @@ struct Timer
     
 
 };
-#define RESET   "\033[0m"
-#define RED     "\033[31;1m"
-#define YELLOW  "\033[33;1m"
-#define BLUE    "\033[34m"
 struct ColoursTerminal
 {
     HANDLE hConsole ;
@@ -42,7 +40,8 @@ struct ColoursTerminal
             {"red" , 12 },
             {"yellow" , 14} ,
             {"blue" , 9} ,
-            {"white" , 15} 
+            {"white" , 15} ,
+            {"green" , 2}
         };
     }
 
@@ -59,19 +58,33 @@ struct Game
     vector<int> colums_height;
     int colums_height_sum;
 
-    bool isPlayerOneTurn = 1 ;
+    bool isPlayerOneTurn , isTwoPlayersGame  ;
     
     int player1Score , player2Score;
+    bool isNewGamePub ;
 
     ColoursTerminal tr ;
-    Game(){
-        setSize();
-        initializeGrid();
+    Game(bool isNewGame=true,string FEN=""){
+        isNewGamePub = isNewGame ; // i will use it later
+        if (isNewGame)
+        {
+            setSize() ;
+            initializeGrid();
+            isPlayerOneTurn = 1;
+        }
+        else
+            loadGame(FEN) ;
         
         colums_height.resize(colums,0);
         colums_height_sum = 0 ;
 
-        player1Score = 0 ; player2Score=0 ;
+        player1Score = 0,player2Score=0 ;
+
+        if (!isNewGame)
+                matchColumsHeightWirhGrid() ;
+
+
+        srand(time(0));
     }
     void setSize() {
         cout << "dimentions of Grid >> (colums,rows)\n" ;
@@ -79,6 +92,21 @@ struct Game
     }
     void initializeGrid() {
         grid.resize(rows,vector<char>(colums,'.')) ;
+    }
+    void matchColumsHeightWirhGrid(){
+        for (int c = 0; c < colums; c++)
+        {
+            for (int r = rows-1; r >= 0; r--)
+            {
+                if (grid[r][c] != '.')
+                        {
+                            colums_height[c] = (rows) -r ;
+                            colums_height_sum++ ;
+                        }
+                else 
+                        break;
+            }
+        }
     }
     
 
@@ -109,6 +137,79 @@ struct Game
         cout << "\n\n";
         tr.colourize("white") ;
     }
+    string gridToFEN(){ 
+        //rows/colums/grid/isplayeroneturn + istwoplayerGame
+        string fen = "";
+        fen += (rows + '0') ;
+        fen += '/' ;
+        fen += (colums + '0') ;
+        fen += '/' ;
+
+        for (int r = 0; r < rows; r++)
+        {
+            int cnt=0; 
+            for (int c = 0; c < colums; c++)
+            {
+                char &ch = grid[r][c] ;
+                if (ch == '.') {
+                    cnt++ ;
+                    if (c == colums-1 ||grid[r][c+1] != '.' ){
+                        fen += (cnt+'0') ;
+                        cnt = 0;
+                    }
+
+                }
+                else 
+                    fen += ch ;
+            }
+            fen += '/' ;
+        }
+
+        fen += (isPlayerOneTurn + '0') ;
+        fen += (isTwoPlayersGame + '0') ; 
+
+        return fen;
+        
+    }
+    int extractRowsColsFEN(const string &FEN ,int &fenCnt){
+        string tmpNum = "" ;
+        while(true)
+        {
+            if (FEN[fenCnt] == '/') 
+            {
+                fenCnt++ ;
+                break;
+            }
+            else tmpNum+= FEN[fenCnt] ;
+
+            fenCnt++ ;
+        }
+        return stoi(tmpNum) ; // str to num
+    }
+    void loadGame(const string &FEN){
+        int fenCnt = 0;
+
+        rows = extractRowsColsFEN(FEN,fenCnt) ;
+        colums = extractRowsColsFEN(FEN,fenCnt) ;
+
+        initializeGrid();
+
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < colums; c++)
+            {
+                char ch = FEN[fenCnt++] ;
+                if (isdigit(ch)) c += (ch - 1 - '0') ;
+                else 
+                    grid[r][c] = ch ;
+            }
+            fenCnt++;
+        }
+        isPlayerOneTurn = (FEN[fenCnt++] == '1'?1:0) ;
+        isTwoPlayersGame = (FEN[fenCnt++] == '1'?1:0) ;
+
+    }
+
     void checkGridAndUpdateCnts(char &user,int &r,int &c,int &cnt,int &fours_cnt){
         if(grid[r][c]==user)
                 cnt++;
@@ -168,16 +269,41 @@ struct Game
 
         return foursCnt;
     }
+    int validRandomCol(){
+        int col = -1;
+        while (col == -1) {
+            col = rand()%colums ;
 
+            int &colum_height = colums_height[col] ;
+            if ( colum_height == rows)
+                col = -1;
+        }
+        return col ;
+    }
     void updatePlayersScore(){
-        if (!isPlayerOneTurn) 
+        if (!isNewGamePub || !isPlayerOneTurn) 
             player1Score = userConnectedFoursCnt('X') ;
-        else 
+        if (!isNewGamePub || isPlayerOneTurn ) 
             player2Score = userConnectedFoursCnt('O') ;
     }
 
-    void runGame() {
+    void runGame(const bool &isTwoPlayers = 0) {
+        if (rows < 4 || colums < 4) {
+            cout << "minumum grid is 4x4\n" ;
+            system("pause") ;
+            return;
+        }
+
         Timer timer ;
+        time_t my_time = time(NULL);
+        
+        if (isNewGamePub)
+            isTwoPlayersGame = isTwoPlayers ;
+
+        tr.colourize("green") ;
+        cout << "(-1) if you want menu or (-2) if you want to save current version of the game\n" ;
+        system("pause") ;
+
         while (true) {
             system("cls") ;
             timer.printTimePassed() ;
@@ -192,14 +318,30 @@ struct Game
             
 
             printGrid() ;
-
+            
             if (colums_height_sum == rows*colums) break;
 
-            cout << "player "<< (isPlayerOneTurn?1:2) << " turn: \n" ;
-
             int col;
-            cin >> col ;
-            col-- ;
+            if (isTwoPlayersGame||isPlayerOneTurn)
+            {
+                cout << "player "<< (isPlayerOneTurn?1:2) << " turn: \n" ;
+                cin >> col ;
+                if (col == -1) return ;
+                else if (col == -2) {
+                    ofstream fout(SavedGamesfilePath,ios_base::app) ;
+                    fout << ctime(&my_time)  ;
+                    fout << gridToFEN() << '\n' ;
+
+                    cout << "Done Saved\n" ;
+                    fout.close();
+
+                    system("pause");
+                    continue;
+                }
+                col-- ;
+            }
+            else 
+                col = validRandomCol() ;
 
             if (col < 0 || col >= colums) {
                 cout << "invalid input choose a number from 1 to " << colums << '\n' ;
@@ -230,17 +372,94 @@ struct Game
         if (player1Score < player2Score) ifFirstplayerWin = 0 ;
 
         tr.colourize((ifFirstplayerWin?"red":"yellow")) ;
-        cout << "player " << (ifFirstplayerWin?"one":"two") << " win the match " ;
+        cout << "player " << (ifFirstplayerWin?"one":"two") << " win the match \n" ;
         tr.colourize("white") ;
 
     }
 
 };
 
+struct connect4GameManager
+{
+    int menu(){
+        int choice=-1 ;
+        while (choice == -1 ) {
+            cout << "enter a num between 1 and 4 : \n" ;
+
+            cout << "1) New two players game\n" ;
+            cout << "2) New one players game\n" ;
+            cout << "3) Load Game\n" ;
+            cout << "4) Exit\n" ;
+
+            cin >> choice ;
+
+            if (choice < 1 || choice > 5 )
+
+                {
+                    cout << "invalid choice\n" ;
+                    choice = -1 ;
+                }
+        }
+        return choice ;
+    }
+
+    void run(){
+        int choice ;
+        while(true) {
+            choice = menu() ;
+
+            if (choice == 1 || choice == 2) {
+                Game twoPlayersGame ;
+                twoPlayersGame.runGame(choice == 1) ;
+            }
+            else if (choice == 3)
+            {
+                vector<pair<string,string>> savedGames ;
+                string date , FEN ;
+                ifstream fin(SavedGamesfilePath) ; 
+                while(true) {
+                    getline(fin,date) ;
+                    if (date.empty()) break;
+                    getline(fin,FEN) ;
+
+                    savedGames.push_back({date,FEN}) ;
+                }
+
+                int savedGamesLen = savedGames.size() ;
+
+                if (savedGamesLen)
+                {
+                    for (int i = 0; i < savedGamesLen; i++){
+                        cout << i+1 << " ) saved at " << savedGames[i].first << '\n' ;
+                    }
+
+                    int choice ;
+                    cin >> choice ;
+                    if (choice < 1 || choice > savedGamesLen) 
+                        cout << "invalid number\n" ;
+                    
+                    FEN = savedGames[choice-1].second ;
+                    Game twoPlayersGame(false,FEN) ;
+                    twoPlayersGame.runGame() ;
+
+                }
+                else 
+                    cout << "no saved Games found\n" ;
+                
+            }
+            else if (choice == 4) 
+                exit(0) ;
+                
+
+        }
+    }
+};
+
+
 int main()
 {
-    Game connect4 ;
-    connect4.runGame();
+    connect4GameManager connect4 ;
+    connect4.run();
     
     return 0;
 }
